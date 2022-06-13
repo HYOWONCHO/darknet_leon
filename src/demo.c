@@ -58,8 +58,10 @@ static volatile int run_fetch_in_thread = 0;
 static volatile int run_detect_in_thread = 0;
 
 
+#include <time.h>
 pthread_cond_t detect_cond;
 pthread_mutex_t detect_mutex;
+char transmit_buf[256];
 
 void *fetch_in_thread(void *ptr)
 {
@@ -270,6 +272,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     float avg_fps = 0;
     int frame_counter = 0;
     int global_frame_counter = 0;
+    int send_count = 0;
 
     //BND
     int person_cnt = 0;
@@ -292,6 +295,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
       THREAD_DETACH(sending->tid[tl]);
     }
 
+    time_t cur_tm = time(NULL);
+    struct tm *cur_ts= localtime(&cur_tm);
 
     while(1){
         ++count;
@@ -368,13 +373,33 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
 
 
                     if(person_cnt > 0){
-                      char buff[256];
-                      sprintf(buff, "%s\/%s_%08d.jpg", "/var/www/html/detected", "person", count);
-                      printf("save file name : %s \n", buff);
-                      if(show_img) save_cv_jpg(show_img, buff);
-                      release_person_detect();
-                      debug_printf("signal ~~~~~ wake-up ");
-                      pthread_cond_signal(&detect_cond);
+                      //char transmit_buf[256];
+                       
+                      send_count++;
+                      time_t record_tm = time(NULL);
+                      struct tm *record_ts = localtime(&record_tm);
+
+                      if(send_count >= 5 ) {
+                        send_count = 0;
+                        printf("%d person detected \n", person_cnt);
+                        sprintf(transmit_buf, "%s\/%s_%d%d%d_%d%d_%d.jpg", "/var/www/html/detected", 
+                            "person", 
+                            record_ts->tm_year, record_ts->tm_mon, record_ts->tm_mday,
+                            record_ts->tm_hour, record_ts->tm_min, record_ts->tm_sec);
+
+                        printf("save file name : %s \n", transmit_buf);
+                        release_person_detect();
+                        if(show_img) {
+                          save_cv_jpg(show_img, transmit_buf);
+                          debug_printf("signal ~~~~~ wake-up ");
+                          pthread_cond_signal(&detect_cond);
+                        }
+                        else {
+                          debug_printf("show image transmit_bufer point to the Nill ~~~~");
+                        }
+                      } 
+
+
                       person_cnt = 0;
                     }
 

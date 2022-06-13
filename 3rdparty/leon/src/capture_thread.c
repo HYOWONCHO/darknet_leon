@@ -36,7 +36,7 @@ void *capture_start(void *priv)
     }
 
     while(1) {
-      //pthread_mutex_lock()
+      pthread_mutex_lock(&detect_mutex);
       //pthread_cond_wait(&detect_cond, &detect_mutex);
       debug_printf("wait the signal from ai engine");
       pthread_cond_wait(&detect_cond, &detect_mutex);
@@ -57,6 +57,7 @@ void *capture_start(void *priv)
       debug_printf("signal to xfer~~~");
 
       COND_SIGNAL(handle);
+      pthread_mutex_unlock(&detect_mutex);
     }
 
 

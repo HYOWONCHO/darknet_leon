@@ -55,6 +55,7 @@ static void *packet_aligin_and_padding(uint8_t *pkt)
 //static struct xfer_packet_t *xfer_create_recording_list_packet(xfer_handle_t *h)
 struct xfer_packet_t *xfer_create_recording_list_packet(struct xfer_handle_t *h)
 {
+    extern char transmit_buf[64];
     uint32_t start_prefix = XFER_START_PREFIX;
     uint32_t end_prefix = XFER_END_PREFIX;
     int sz_pkt = 0L;
@@ -101,6 +102,8 @@ struct xfer_packet_t *xfer_create_recording_list_packet(struct xfer_handle_t *h)
     }
 #endif
 
+    //for(int i = 0; i < sz_wwwlist; i++) {
+#if 0
     for(int i = 0; i < sz_wwwlist; i++) {
         int cpylen =  0L;
         cpylen = strnlen_s(wwwlist->data, 0xFF);
@@ -113,6 +116,15 @@ struct xfer_packet_t *xfer_create_recording_list_packet(struct xfer_handle_t *h)
         dest += cpylen+1;
         //sz_pkt += cpylen+1; 
     }
+#else
+    int cpylen = strlen(transmit_buf);
+
+    sz_pkt += cpylen + 1;
+    pkt->body = realloc(pkt->body, sz_pkt);
+    memzero_s(dest, cpylen);
+    memcpy_s((void *)dest, cpylen, (const void *)transmit_buf, cpylen);
+    dest+= cpylen+1;
+#endif
 
     //__BUF_HEX_PRINT(pkt->body, "list packet", sz_pkt);
 
@@ -134,6 +146,7 @@ struct xfer_packet_t *xfer_create_recording_list_packet(struct xfer_handle_t *h)
     h->pkt = pkt;
     h->pkt->sz_payload = sz_pkt;
 
+    printf("-----> transmit file : %s , pkt len: %d (sz_pkt :%d)\n", transmit_buf, h->pkt->sz_payload, sz_pkt);
 
 err_done:
     //MEM_RELEASE(pkt);
@@ -170,6 +183,7 @@ static int xfer_interact_init(socket_class_t **s)
 
 static int xfer_sending(void *handle)
 {
+    //extern char transmit_buf[64];
     struct xfer_handle_t *xfer;
     char *sending_buf = NULL;
     int i = 0;
@@ -178,9 +192,9 @@ static int xfer_sending(void *handle)
     xfer = (struct xfer_handl_t *)handle;
     sending_cnt = xfer->pkt->sz_payload / 64;
     sending_buf = (char *)xfer->pkt->body;
+    __BUF_HEX_PRINT(sending_buf, "sending payload", sending_cnt);
     for ( i = 0; i  < sending_cnt; i++)  {
         xfer->sck->send(xfer->sck, sending_buf, 64); 
-        __BUF_HEX_PRINT(sending_buf, "sending payload", 64);
         sending_buf += 64;
     }
 
@@ -196,28 +210,33 @@ void *xfer_start(void *priv)
 
     //printf("handle address: %p", handle);
 
+
+    if(xfer_interact_init(&xfer->sck) != EOK) {
+      return NULL;
+    }
+
+    info_printf("xfer socket fd : %d", xfer->sck->_sockfd);
+
+
     while(1) {
-
-      if(xfer_interact_init(&xfer->sck) != EOK) {
-        return NULL;
-      }
-
+      MUTEX_LOCK(xfer->tm);
       debug_printf("wait capture thread wait ~~~");
       COND_WAIT(xfer->tm);
 
       debug_printf("wake-up xfer thread !!!");
 
       debug_printf("Handle list: %p", xfer->tm->s);
-      _print_recording_list(xfer->tm->s);
+      //_print_recording_list(xfer->tm->s);
 
 
       // TO DO: Send the recording list to the Host
       xfer_create_recording_list_packet(xfer);
-      __BUF_HEX_PRINT(xfer->pkt->body, "sending packet", xfer->pkt->sz_payload);
+      //__BUF_HEX_PRINT(xfer->pkt->body, "sending packet", xfer->pkt->sz_payload);
 
 
       //xfer->sck->send(xfer->sck, xfer->pkt->body, 128);
       xfer_sending((void *)xfer);
+      MUTEX_UNLOCK(xfer->tm);
       //xfer->sck->close(xfer);
     }
      

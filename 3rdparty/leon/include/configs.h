@@ -9,5 +9,5 @@
 //#endif
 //
 //
-#define SOCKET_IP_ADDR    "192.168.0.14"
+#define SOCKET_IP_ADDR    "192.168.0.6"
 #define SOCKET_IP_PORT    12345
